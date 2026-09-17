@@ -1,26 +1,111 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --surface: #f6f8fb;
+  --foreground: #0f1729;
+  --card: #ffffff;
+  --card-foreground: #0f1729;
+  --muted: #eef2f7;
+  --muted-foreground: #5a6b85;
+  --border: #e3e8f0;
+  --input: #e3e8f0;
+  --primary: #1e5eff;
+  --primary-foreground: #ffffff;
+  --accent: #f5a623;
+  --accent-foreground: #241a05;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --ring: #1e5eff;
+}
+
+.dark {
+  --background: #080d1a;
+  --surface: #0c1424;
+  --foreground: #e6ecf5;
+  --card: #0f1a2e;
+  --card-foreground: #e6ecf5;
+  --muted: #16233b;
+  --muted-foreground: #93a3bd;
+  --border: #1d2b45;
+  --input: #22334f;
+  --primary: #4d82ff;
+  --primary-foreground: #05122e;
+  --accent: #f5b53d;
+  --accent-foreground: #241a05;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --ring: #4d82ff;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Utility helpers layered on Tailwind */
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+  .card {
+    @apply rounded-xl border bg-card text-card-foreground shadow-sm;
+  }
+  /* Shared button base — every variant selector gets it (Tailwind v4 can't @apply a custom class). */
+  .btn,
+  .btn-primary,
+  .btn-outline,
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:opacity-90;
+  }
+  .btn-outline {
+    @apply border bg-transparent hover:bg-muted;
+  }
+  .btn-ghost {
+    @apply bg-transparent hover:bg-muted;
+  }
+  .field-label {
+    @apply block text-sm font-medium text-foreground mb-1.5;
+  }
+  .field-input {
+    @apply w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium;
+  }
 }

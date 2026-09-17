@@ -1,0 +1,279 @@
+// VoltCalc data model.
+//
+// This is the full Phase-1 schema. It is ready to migrate once DATABASE_URL
+// points at a Postgres instance with the `pgvector` extension available:
+//
+//   npx prisma migrate dev --name init
+//
+// The app currently runs its calculators fully client-side, so the DB is only
+// required to light up auth, saved projects/history, subscriptions/metering,
+// the AI code-search (CodeChunk vectors) and the admin-editable config.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ---------------------------------------------------------------------------
+// Auth (Auth.js / NextAuth models) + roles
+// ---------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+
+  accounts      Account[]
+  sessions      Session[]
+  subscription  Subscription?
+  usageEvents   UsageEvent[]
+  projects      Project[]
+  calculations  Calculation[]
+  conversations ChatConversation[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Billing + metering
+// ---------------------------------------------------------------------------
+
+enum PlanId {
+  FREE
+  PRO
+  TEAM
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  plan                 PlanId    @default(FREE)
+  status               String    @default("active")
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  currentPeriodEnd     DateTime?
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// One row per metered action; free-tier limit is counted per calendar month.
+model UsageEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  kind          String   // "calculation" | "ai_question" | "export"
+  calculatorKey String?
+  month         String   // "2026-07" for cheap monthly aggregation
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, month])
+}
+
+// ---------------------------------------------------------------------------
+// Saved work
+// ---------------------------------------------------------------------------
+
+model Project {
+  id           String         @id @default(cuid())
+  userId       String
+  name         String
+  createdAt    DateTime       @default(now())
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calculations Calculation[]
+  panels       PanelSchedule[]
+}
+
+model Calculation {
+  id            String   @id @default(cuid())
+  userId        String
+  projectId     String?
+  calculatorKey String
+  standard      String   @default("CEC")
+  inputs        Json
+  result        Json     // summary + steps + citations, as computed
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model PanelSchedule {
+  id         String    @id @default(cuid())
+  projectId  String?
+  name       String
+  voltageKey String
+  capacity   Int       @default(42)
+  circuits   Circuit[]
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model Circuit {
+  id          String        @id @default(cuid())
+  panelId     String
+  position    Int
+  description String
+  type        String
+  loadVA      Float
+  poles       Int
+  breakerTrip Int?
+  panel       PanelSchedule @relation(fields: [panelId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Code standards + AI code search (RAG)
+// ---------------------------------------------------------------------------
+
+model CodeStandard {
+  id        String      @id @default(cuid())
+  code      String      @unique // "CEC" | "NEC"
+  region    String
+  edition   String
+  available Boolean     @default(false)
+  chunks    CodeChunk[]
+}
+
+/// Ingested, chunked code text with a Voyage embedding for pgvector search.
+/// Text is stored privately for grounding only; the assistant paraphrases + cites.
+model CodeChunk {
+  id         String                      @id @default(cuid())
+  standardId String
+  section    String?
+  table      String?
+  page       Int?
+  content    String
+  embedding  Unsupported("vector(1024)")?
+  standard   CodeStandard                @relation(fields: [standardId], references: [id], onDelete: Cascade)
+
+  @@index([standardId])
+}
+
+model ChatConversation {
+  id        String        @id @default(cuid())
+  userId    String
+  title     String?
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           String           // "user" | "assistant"
+  content        String
+  citations      Json?
+  createdAt      DateTime         @default(now())
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Leads + admin-editable configuration ("everything controlled from the dashboard")
+// ---------------------------------------------------------------------------
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  type      String   @default("support") // "hire" | "support"
+  name      String
+  email     String
+  message   String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+/// Free-form key/value site settings (hero copy, contact text, footer, flags).
+model SiteConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+}
+
+/// Admin control over which calculators appear, their order and gating.
+model CalculatorConfig {
+  id       String  @id @default(cuid())
+  key      String  @unique
+  name     String
+  category String
+  enabled  Boolean @default(true)
+  order    Int     @default(0)
+  regions  String[] // ["CEC"]
+  freeTier Boolean @default(true) // available on the free plan
+}
+
+/// Admin-editable plan pricing + limits (mirrors lib/plans.ts).
+model PlanConfig {
+  id                  String  @id @default(cuid())
+  plan                PlanId  @unique
+  priceMonthly        Int
+  priceYearly         Int
+  freeCalcsPerMonth   Int?
+  aiQuestionsPerMonth Int?
+  stripePriceMonthly  String?
+  stripePriceYearly   String?
+}
+
+/// Blog posts, managed from the admin dashboard. `blocks` holds the ordered
+/// content blocks built with the drag-and-drop editor; `format` selects the
+/// layout template used to render them.
+model BlogPost {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  excerpt     String?
+  coverImage  String?
+  format      String    @default("standard") // standard | magazine | docs | minimal | hero
+  body        String    @default("") // Markdown article body
+  tags        String[]
+  author      String?
+  status      String    @default("draft") // draft | published
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, publishedAt])
+}
