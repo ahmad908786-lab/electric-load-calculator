@@ -4,9 +4,14 @@ Subscription platform of **code-compliant electrical calculators** + an **AI cod
 assistant**, starting with the Canadian Electrical Code (CEC 2021 / OESC).
 Next.js 16 (App Router) · TypeScript · Tailwind v4 · Prisma/Postgres+pgvector.
 
-## Node on this machine
-Node 24 LTS is installed at `C:\Users\admin\nodejs` (portable, on USER PATH).
-In fresh shells prepend it: `$env:Path = 'C:\Users\admin\nodejs;' + $env:Path`.
+## Environments
+Work happens on two kinds of machine, synced through GitHub
+(`ahmad908786-lab/electric-load-calculator`, branch `main`):
+- **Main laptop (Windows):** Node 24 LTS is at `C:\Users\admin\nodejs` (portable,
+  on USER PATH). In fresh shells prepend it: `$env:Path = 'C:\Users\admin\nodejs;' + $env:Path`.
+- **Cloud sessions (Linux, claude.ai/code or mobile):** use the system Node 20+.
+  Run `npm install` first. No `.env` exists there, which is fine: the app runs offline.
+  Always commit and push finished work so the laptop can `git pull` it.
 
 ## Commands
 - `npm run dev` — dev server (port 3000, or auto if taken)
